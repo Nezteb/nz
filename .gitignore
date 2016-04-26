@@ -1,3 +1,9 @@
+# Temp directory
+/temp
+
+# Python
+*.pyc
+
 # Object files
 *.o
 *.ko
