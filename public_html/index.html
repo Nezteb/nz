@@ -17,24 +17,12 @@
 </head>
 <body>
     <h1>Hello!</h1>
-    <h3>Welcome to <span id="hostname"></span>!<h2>
+    <h3>Welcome to nz!<h2>
     <h3>Your IP is <span id="ip"></span>!<h3>
     <h3>It is <span id="time"></span></h3>
 
     <script type="text/javascript" src="https://l2.io/ip.js?var=userIP"></script>
     <script>
-        var theHostname = location.hostname;
-        var hostnameID = document.getElementById("hostname");
-
-        if(theHostname === "")
-        {
-            hostnameID.innerHTML = "UNKOWN";
-        }
-        else
-        {
-            hostnameID.innerHTML = theHostname;
-        }
-
         var ipID = document.getElementById("ip");
 
         if(userIP === "")
