@@ -1,39 +1,73 @@
 #!/bin/bash
+# Noah Betzen
+# setup script for my nz project on Ubuntu 14.04 servers
 
+SSHPORT=1234 # change this if you want
+WEBPORT=80 # change this if you want
 
-if [[ "$#" -eq 1 ]];
-    then SSHPORT=$1; echo "SSHPORT=$1;";
-    else SSHPORT=22; echo "SHPORT=22;";
+ISPROXY=""
+read -p "Is this server the proxy? (y/n) [default: y] " ISPROXY
+if [[ -z "$ISPROXY" ]];
+then
+    ISPROXY="y"
 fi
 
-if [[ "$#" -eq 2 ]];
-    then SSHPORT=$1; WEBPORT=$2; echo "SSHPORT=$1; WEBPORT=$2;";
-    else SSHPORT=22; WEBPORT=80; echo "SHPORT=22; WEBPORT=80;";
+if [[ "$ISPROXY" = "y" ]];
+then
+    SERVERS=()
+    INPUT=""
+    while read -p "Enter web server (blank when done) -> " INPUT; [[ -n "$INPUT" ]];
+    do
+            SERVERS+=($INPUT)
+    done
+else # is server, not proxy
+    read -p "What is the proxy server's IP? " PROXYIP
 fi
 
+LOCAL=127.0.0.1 # you probably shouldn't to change this
+MYIP=`/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}'` # bash magic to get your ip
+
+# install dependencies
 apt-get update -y
 apt-get install -y build-essential
 apt-get install -y linux-headers-`uname -r`
 apt-get install -y g++ gcc git
 apt-get install -y python python-pip python-dev
-
 pip install --upgrade pip
 pip install locustio
+pip install beautifulsoup4
 
+# set up fail2ban and ufw
 apt-get install -y fail2ban ufw
+ufw --force disable
+ufw --force reset
+ufw logging on
+ufw default deny incoming
+ufw default deny outgoing
+ufw allow out proto udp from any to 8.8.8.8 port 53 # dns out
+ufw allow out proto udp from any to any port 67 # dhcp out
+ufw allow in proto udp from any to any port 68 # dhcp in
+ufw allow in proto tcp from any to any port $SSHPORT # ssh in
 
-# sudo ufw --force disable
-# sudo ufw --force reset
-# sudo ufw logging on
-# sudo ufw default deny incoming
-# sudo ufw default deny outgoing
-# sudo ufw allow out proto udp from any to 8.8.8.8 port 53
-# sudo ufw allow out proto udp from any to any port 67
-# sudo ufw allow in proto udp from any to any port 68
-# sudo ufw allow in proto tcp from any to any port $WEBPORT
-# sudo ufw allow in proto tcp from any to any port $SSHPORT
-# sudo ufw --force enable
+if [[ "$ISPROXY" = "y" ]];
+then
+    ufw allow in proto tcp from any to any port $WEBPORT # web in
 
+    for SERVER in "${SERVERS[@]}"; do
+        ufw allow out proto tcp from any to $SERVER port $WEBPORT # web out
+    done
+else # is server, not proxy
+    ufw allow in proto tcp from $PROXYIP to any port $WEBPORT # web in
+fi
+
+IPV6=no # disable IPv6
+echo -e "\n" >> /etc/default/ufw
+echo "IPV6=no" >> /etc/default/ufw
+
+ufw --force enable
+ufw status numbered
+
+# reconfigure ssh
 echo -e "\n" >> /etc/ssh/sshd_config
 echo "Port $SSHPORT" >> /etc/ssh/sshd_config
 echo "PermitRootLogin without-password" >> /etc/ssh/sshd_config
