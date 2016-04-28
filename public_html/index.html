@@ -2,12 +2,36 @@
 <html>
 <head>
     <style>
-        h1 h2 {
+        h1 {
             color: red;
+            margin: 0px;
+        }
+
+        h3 {
+            color: cyan;
+        }
+
+        h4 {
+            padding: 10px;
+            color: black;
+            background-color: red;
+            text-align: center;
         }
 
         p {
-            color: blue;
+            margin: 0px;
+        }
+
+        img {
+            font-size: 20px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        #thediv {
+            position: absolute;
+            top: 10px;
+            right: 10px;
         }
     </style>
 
@@ -16,14 +40,21 @@
     </script>
 </head>
 <body>
-    <h1>Hello!</h1>
-    <h3>Welcome to <span id="hostname">nz</span>!<h2>
-    <br>
-    <h3>Your IP is:</h3>
-    <h3>[<span id="ip">Loading...</span>]<h3>
-    <br>
-    <h3>The time is:</h3>
-    <h3>[<span id="time">Loading...</span>]</h3>
+    <div style="background-color: black; float: left; padding: 10px;">
+        <h1>Hello!</h1>
+        <h3>Welcome to <span id="hostname">nz</span>!<h2>
+        <h3>Your IP is:</h3>
+        <h4><span id="ip">Loading...</span></h4>
+        <h3>The time is:</h3>
+        <h4><span id="time">Loading...</span></h4>
+    </div>
+
+    <div id="thediv" style="float: right">
+        <h1>Do you like cat gifs?</h1>
+        <img alt="Loading..." style="max-width: 600px; max-height: 600px; border: 1px solid black;" src="" id="catgifs">
+        <p>(Try refreshing for more...)</p>
+        <p>Source: <a href="https://github.com/Giphy/GiphyAPI">Giphy API</a></p>
+    </div>
 
     <script type="text/javascript" src="https://l2.io/ip.js?var=userIP"></script>
     <script>
@@ -39,6 +70,19 @@
         }
 
         var timeID = document.getElementById("time");
+
+        var catgifsID = document.getElementById("catgifs");
+        var xhr = new XMLHttpRequest();
+        xhr.onload = function()
+        {
+            var stuff = JSON.parse(this.response);
+            var url = stuff.data.image_original_url;
+            catgifsID.src = url;
+
+        }
+        xhr.open("GET", "http://api.giphy.com/v1/gifs/random?api_key=dc6zaTOxFJmzC&tag=kittens");
+        xhr.send();
+
         timeID.innerHTML = Date()
     </script>
 </body>
