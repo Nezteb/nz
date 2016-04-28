@@ -9,7 +9,7 @@ Compile with:
 g++ nzProx.cpp -o nzProx.out
 
 Run with:
-./nzProx.out -l PORT -h HOST0 -j HOST1 -p PORT [-f] 2>&1 | tee nzProx.log
+./nzProx.out -l PORT -h HOST0 -j HOST1 -p PORT [-f]
 
 */
 
