@@ -212,14 +212,7 @@ void handleClient(int clientSock, struct sockaddr_in clientAddr)
      // a process forwarding data from client to remote socket
     if (fork() == 0)
     {
-        if (commandOut)
-        {
-            forwardDataExt(clientSock, remoteSock, commandOut);
-        }
-        else
-        {
-            forwardData(clientSock, remoteSock);
-        }
+        forwardData(clientSock, remoteSock);
 
         exit(0);
     }
@@ -227,14 +220,7 @@ void handleClient(int clientSock, struct sockaddr_in clientAddr)
     // a process forwarding data from remote socket to client
     if (fork() == 0)
     {
-        if (commandIn)
-        {
-            forwardDataExt(remoteSock, clientSock, commandIn);
-        }
-        else
-        {
-            forwardData(remoteSock, clientSock);
-        }
+        forwardData(remoteSock, clientSock);
 
         exit(0);
     }
@@ -259,59 +245,6 @@ void forwardData(int sourceSock, int destinationSock)
 
     shutdown(sourceSock, SHUT_RDWR); // stop other processes from using socket
     close(sourceSock);
-}
-
-void forwardDataExt(int sourceSock, int destinationSock, char *command)
-{
-    char buffer[BUFFERSIZE];
-    int retVal;
-    int pipeIn[2];
-    int pipeOut[2];
-
-    // create command input and output pipes
-    if (pipe(pipeIn) < 0 || pipe(pipeOut) < 0)
-    {
-        cout << "ERROR: Cannot create pipe!" << endl;
-        exit(-1);
-    }
-
-    if (fork() == 0)
-    {
-        dup2(pipeIn[PIPEREAD], STDIN_FILENO); // replace standard input with input part of pipeIn
-        dup2(pipeOut[PIPEWRITE], STDOUT_FILENO); // replace standard output with output part of pipeOut
-        close(pipeIn[PIPEWRITE]); // close unused end of pipeIn
-        close(pipeOut[PIPEREAD]); // close unused end of pipeOut
-        retVal = system(command); // execute command
-        exit(retVal);
-    }
-    else
-    {
-        close(pipeIn[PIPEREAD]); // no need to read from input pipe here
-        close(pipeOut[PIPEWRITE]); // no need to write to output pipe here
-
-        // read data from input socket
-        while ((retVal = recv(sourceSock, buffer, BUFFERSIZE, 0)) > 0)
-        {
-            // write data to input pipe of external command
-            if (write(pipeIn[PIPEWRITE], buffer, retVal) < 0)
-            {
-                cout << "ERROR: Cannot write to pipe!" << endl;
-                exit(1);
-            }
-
-            // read command output
-            if ((retVal = read(pipeOut[PIPEREAD], buffer, BUFFERSIZE)) > 0)
-            {
-                send(destinationSock, buffer, retVal, 0); // send data to output socket
-            }
-        }
-
-        shutdown(destinationSock, SHUT_RDWR); // stop other processes from using socket
-        close(destinationSock);
-
-        shutdown(sourceSock, SHUT_RDWR); // stop other processes from using socket
-        close(sourceSock);
-    }
 }
 
 int createConnection()
