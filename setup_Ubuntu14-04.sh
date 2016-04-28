@@ -2,8 +2,19 @@
 # Noah Betzen
 # setup script for my nz project on Ubuntu 14.04 servers
 
-SSHPORT=1234 # change this if you want
-WEBPORT=80 # change this if you want
+SSHPORT=""
+read -p "SSH port? [default: 22] " SSHPORT
+if [[ -z "$SSHPORT" ]];
+then
+    SSHPORT="22"
+fi
+
+WEBPORT=""
+read -p "Web port? [default: 80] " WEBPORT
+if [[ -z "$WEBPORT" ]];
+then
+    WEBPORT="80"
+fi
 
 ISPROXY=""
 read -p "Is this server the proxy? (y/n) [default: y] " ISPROXY
@@ -60,7 +71,8 @@ else # is server, not proxy
     ufw allow in proto tcp from $PROXYIP to any port $WEBPORT # web in
 fi
 
-IPV6=no # disable IPv6
+# disable IPv6
+IPV6=no
 echo -e "\n" >> /etc/default/ufw
 echo "IPV6=no" >> /etc/default/ufw
 
