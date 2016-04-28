@@ -7,4 +7,4 @@ nzServ:
 	g++ nzServ.cpp -o nzServ.out
 
 clean:
-	rm -f *.out
+	rm -f *.out *.log

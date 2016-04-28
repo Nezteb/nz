@@ -27,6 +27,10 @@ Run with:
 #include <iostream>
 using std::cout;
 using std::endl;
+#include <fstream>
+using std::ofstream;
+#include <sstream>
+using std::stringstream;
 
 #define BUFFERSIZE 8096
 
@@ -43,6 +47,14 @@ struct
 	{0,0}
 };
 
+void logIt(stringstream &logStream)
+{
+	ofstream logFile("nzServ.log", std::ios_base::out | std::ios_base::app);
+    logFile << logStream.rdbuf();
+	logStream.str("");
+}
+stringstream logStream;
+
 void web(int fd, int hit)
 {
 	int j;
@@ -58,7 +70,8 @@ void web(int fd, int hit)
 
 	if(ret == 0 || ret == -1)
 	{
-		cout << "ERROR: Failed to read browser request!" << endl;
+		logStream << "ERROR: Failed to read browser request!" << endl;
+		logIt(logStream);
 		exit(1);
 	}
 	if(ret > 0 && ret < BUFFERSIZE)
@@ -78,11 +91,13 @@ void web(int fd, int hit)
 		}
 	}
 
-	cout << "LOG: Request: " << buffer << " " << hit << endl;
+	logStream << "LOG: Request: " << buffer << " " << hit << endl;
+	logIt(logStream);
 
 	if(strncmp(buffer,"GET ",4) && strncmp(buffer,"get ",4))
 	{
-		cout << "ERROR: Can only handle GET requests!" << endl;
+		logStream << "ERROR: Can only handle GET requests!" << endl;
+		logIt(logStream);
 		exit(1);
 	}
 
@@ -99,7 +114,8 @@ void web(int fd, int hit)
 	{
 		if(buffer[j] == '.' && buffer[j+1] == '.')
 		{
-			cout << "ERROR: . and .. paths not supported." << endl;
+			logStream << "ERROR: . and .. paths not supported." << endl;
+			logIt(logStream);
 			exit(1);
 		}
 	}
@@ -124,20 +140,23 @@ void web(int fd, int hit)
 	}
 	if(fileStr == 0)
 	{
-		cout << "ERROR: File extension not supported!" << endl;
+		logStream << "ERROR: File extension not supported!" << endl;
+		logIt(logStream);
 		exit(1);
 	}
 
 	if((fileFd = open(&buffer[5], O_RDONLY)) == -1)
 	{
-		cout << "ERROR: Failed to open file!" << endl;
+		logStream << "ERROR: Failed to open file! " << buffer << endl;
+		logIt(logStream);
 		exit(1);
 	}
 
-	cout << "LOG: Send: " << &buffer[5] << " " << hit << endl;
+	logStream << "LOG: Send: " << &buffer[5] << " " << hit << endl;
+	logIt(logStream);
 
 	sprintf(buffer,"HTTP/1.0 200 OK\r\nContent-Type: %s\r\n\r\n", fileStr);
-	write(fd,buffer,strlen(buffer));
+	write(fd, buffer, strlen(buffer));
 
 	while ((ret = read(fileFd, buffer, BUFFERSIZE)) > 0)
 	{
@@ -150,7 +169,12 @@ void web(int fd, int hit)
 
 int main(int argc, char *argv[])
 {
-	int i, port, pid, listenfd, socketfd, hit;
+	int i;
+	int port;
+	int pid;
+	int listenFd;
+	int socketFd;
+	int hit;
 	socklen_t length;
 	static struct sockaddr_in cli_addr;
 	static struct sockaddr_in serv_addr;
@@ -176,61 +200,78 @@ int main(int argc, char *argv[])
 
 	setpgrp();
 
-	cout << "LOG: Web server starting: " << argv[1] << " " << getpid() << endl;
+	logStream << "LOG: Web server starting: " << argv[1] << " " << getpid() << endl;
+	logIt(logStream);
 
-	if((listenfd = socket(AF_INET, SOCK_STREAM,0)) < 0)
+	if((listenFd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 	{
-		cout << "ERROR: Cannot create socket!" << endl;
+		logStream << "ERROR: Cannot create socket!" << endl;
+		logIt(logStream);
+		exit(1);
+	}
+
+	int enable = 1;
+	if(setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+	{
+		logStream << "ERROR: Cannot set socket options!" << endl;
+		logIt(logStream);
 		exit(1);
 	}
 
 	port = atoi(argv[1]);
+    logStream << "LOG: Port: " << port << endl;
+    logIt(logStream);
 
 	if(port < 0 || port > 65535)
 	{
-		cout << "ERROR: Invalid port number, try 1 through 65535! Port: " << argv[1] << endl;
+		logStream << "ERROR: Invalid port number, try 1 through 65535! Port: " << argv[1] << endl;
+		logIt(logStream);
 		exit(1);
 	}
 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	serv_addr.sin_port = htons(port);
-	if(bind(listenfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+	if(bind(listenFd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
 	{
-		cout << "ERROR: Cannot bind to socket!" << endl;
+		logStream << "ERROR: Cannot bind to socket!" << endl;
+		logIt(logStream);
 		exit(1);
 	}
 
-	if(listen(listenfd, 64) < 0)
+	if(listen(listenFd, 64) < 0)
 	{
-		cout << "ERROR: Cannot listen on socket!" << endl;
+		logStream << "ERROR: Cannot listen on socket!" << endl;
+		logIt(logStream);
 		exit(1);
 	}
 
 	for(hit=1; ;hit++)
 	{
 		length = sizeof(cli_addr);
-		if((socketfd = accept(listenfd, (struct sockaddr *)&cli_addr, &length)) < 0)
+		if((socketFd = accept(listenFd, (struct sockaddr *)&cli_addr, &length)) < 0)
 		{
-			cout << "ERROR: Cannot accept socket!" << endl;
+			logStream << "ERROR: Cannot accept socket!" << endl;
+			logIt(logStream);
 			exit(1);
 		}
 
 		if((pid = fork()) < 0)
 		{
-			cout << "ERROR: Cannot fork!" << endl;
+			logStream << "ERROR: Cannot fork!" << endl;
+			logIt(logStream);
 			exit(1);
 		}
 		else
 		{
 			if(pid == 0)
 			{
-				close(listenfd);
-				web(socketfd, hit);
+				close(listenFd);
+				web(socketFd, hit);
 			}
 			else
 			{
-				close(socketfd);
+				close(socketFd);
 			}
 		}
 	}

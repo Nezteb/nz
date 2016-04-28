@@ -9,7 +9,7 @@ Compile with:
 g++ nzProx.cpp -o nzProx.out
 
 Run with:
-./nzProx.out -l PORT -h HOST -p PORT [-f] 2>&1 | tee nzProx.log
+./nzProx.out -l PORT -h HOST0 -j HOST1 -p PORT [-f] 2>&1 | tee nzProx.log
 
 */
 
@@ -27,6 +27,10 @@ Run with:
 #include <iostream>
 using std::cout;
 using std::endl;
+#include <fstream>
+using std::ofstream;
+#include <sstream>
+using std::stringstream;
 
 #define BUFFERSIZE 1024
 
@@ -34,24 +38,32 @@ using std::endl;
 #define PIPEWRITE 1
 
 // forward declarations
-void forwardDataExt(int sourceSock, int destinationSock, char *command);
 void forwardData(int sourceSock, int destinationSock);
 void sigchldHandler(int signal);
 void sigtermHandler(int signal);
-void handleClient(int clientSock, struct sockaddr_in clientAddr);
+void handleClient(int clientSock, struct sockaddr_in clientAddr, bool sendToFirst);
 int createSocket(int port);
-int createConnection();
+int createConnection(int num);
 int parseArguments(int argc, char *argv[]);
 void serverLoop();
 
 int serverSock;
 int clientSock;
-int remoteSock;
+int remoteSock0;
+int remoteSock1;
 int remotePort = 0;
-char *remoteHost;
-char *commandIn;
-char *commandOut;
+
+char *remoteHost0;
+char *remoteHost1;
 bool foreground = false;
+
+void logIt(stringstream &logStream)
+{
+	ofstream logFile("nzProx.log", std::ios_base::out | std::ios_base::app);
+    logFile << logStream.rdbuf();
+    logStream.str("");
+}
+stringstream logStream;
 
 int main(int argc, char *argv[])
 {
@@ -62,14 +74,16 @@ int main(int argc, char *argv[])
 
     if (localPort < 0)
     {
-        cout << "Usage: " << argv[0] << " -l localPort -h remoteHost -p remotePort [-f (stay in foreground)]\n";
+        logStream << "Usage: " << argv[0] << " -l localPort -h remoteHost0 -j remoteHost1 -p remotePort [-f (stay in foreground)]" << endl;
+        logIt(logStream);
         exit(1);
     }
 
     // start server
     if ((serverSock = createSocket(localPort)) < 0)
     {
-        cout << "ERROR: Cannot run server!" << endl;
+        logStream << "ERROR: Cannot run server!" << endl;
+        logIt(logStream);
         exit(1);
     }
 
@@ -88,7 +102,8 @@ int main(int argc, char *argv[])
                 serverLoop();
                 break;
             case -1: // error
-                cout << "ERROR: Cannot spawn child!" << endl;
+                logStream << "ERROR: Cannot spawn child!" << endl;
+                logIt(logStream);
                 exit(1);
             default: // parent
                 close(serverSock);
@@ -103,7 +118,7 @@ int parseArguments(int argc, char *argv[])
     int argument;
     int localPort = 0;
 
-    while ((argument = getopt(argc, argv, "l:h:p:f")) != -1)
+    while ((argument = getopt(argc, argv, "l:h:j:p:f")) != -1)
     {
         switch(argument)
         {
@@ -111,7 +126,10 @@ int parseArguments(int argc, char *argv[])
                 localPort = atoi(optarg);
                 break;
             case 'h':
-                remoteHost = optarg;
+                remoteHost0 = optarg;
+                break;
+            case 'j':
+                remoteHost1 = optarg;
                 break;
             case 'p':
                 remotePort = atoi(optarg);
@@ -121,13 +139,14 @@ int parseArguments(int argc, char *argv[])
         }
     }
 
-    if (localPort && remoteHost && remotePort)
+    if (localPort && remoteHost0 && remoteHost1 && remotePort)
     {
         return localPort;
     }
     else
     {
-        cout << "ERROR: Bad syntax!" << endl;
+        logStream << "ERROR: Bad syntax!" << endl;
+        logIt(logStream);
         return -1;
     }
 }
@@ -140,13 +159,15 @@ int createSocket(int port)
 
     if ((serverSock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
-        cout << "ERROR: Bad server socket!" << endl;
+        logStream << "ERROR: Bad server socket!" << endl;
+        logIt(logStream);
         return -1;
     }
 
     if (setsockopt(serverSock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0)
     {
-        cout << "ERROR: Bad server socket opt!" << endl;
+        logStream << "ERROR: Cannot set server socket options!" << endl;
+        logIt(logStream);
         return -1;
     }
 
@@ -157,13 +178,15 @@ int createSocket(int port)
 
     if (bind(serverSock, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) != 0)
     {
-        cout << "ERROR: Bad server bind!" << endl;
+        logStream << "ERROR: Bad server bind!" << endl;
+        logIt(logStream);
         return -1;
     }
 
     if (listen(serverSock, 20) < 0)
     {
-        cout << "ERROR: Server cannot listen!";
+        logStream << "ERROR: Server cannot listen!" << endl;
+        logIt(logStream);
         return -1;
     }
 
@@ -186,50 +209,89 @@ void serverLoop()
 {
     struct sockaddr_in clientAddr;
     socklen_t addrLength = sizeof(clientAddr);
+    bool sendToFirst = true;
 
     while (true)
     {
         clientSock = accept(serverSock, (struct sockaddr*)&clientAddr, &addrLength);
 
+        logStream << "LOOP CHOICE: " << (sendToFirst ? "first" : "second") << endl;
+        logIt(logStream);
+
         // handle client connection in a separate process
         if (fork() == 0)
         {
             close(serverSock);
-            handleClient(clientSock, clientAddr);
+
+            logStream << "FORK CHOICE: " << getpid() << " " << (sendToFirst ? "first" : "second") << endl;
+            logIt(logStream);
+
+            handleClient(clientSock, clientAddr, sendToFirst);
+
             exit(0);
         }
+
+        sendToFirst = !sendToFirst;
 
         close(clientSock);
     }
 
 }
 
-void handleClient(int clientSock, struct sockaddr_in clientAddr)
+void handleClient(int clientSock, struct sockaddr_in clientAddr, bool sendToFirst)
 {
-    if ((remoteSock = createConnection()) < 0)
+    if ((remoteSock0 = createConnection(0)) < 0)
     {
-        cout << "ERROR: Cannot connect to host!";
+        logStream << "ERROR: Cannot connect to host!" << endl;
+        logIt(logStream);
+        return;
+    }
+    if ((remoteSock1 = createConnection(1)) < 0)
+    {
+        logStream << "ERROR: Cannot connect to host!" << endl;
+        logIt(logStream);
         return;
     }
 
-     // a process forwarding data from client to remote socket
-    if (fork() == 0)
-    {
-        forwardData(clientSock, remoteSock);
+    // a process forwarding data from client to remote socket
+   if (fork() == 0)
+   {
+       logStream << "FORK2 CHOICE: " << getpid() << " " << (sendToFirst ? "first" : "second") << endl;
+       logIt(logStream);
 
-        exit(0);
-    }
+       if(sendToFirst)
+       {
+           forwardData(clientSock, remoteSock0);
+           exit(0);
+       }
+       else
+       {
+           forwardData(clientSock, remoteSock1);
+           exit(0);
+       }
+   }
 
-    // a process forwarding data from remote socket to client
-    if (fork() == 0)
-    {
-        forwardData(remoteSock, clientSock);
+   // a process forwarding data from remote socket to client
+   if (fork() == 0)
+   {
+       logStream << "FORK2 CHOICE: " << getpid() << " " << (sendToFirst ? "first" : "second") << endl;
+       logIt(logStream);
 
-        exit(0);
-    }
+       if(sendToFirst)
+       {
+           forwardData(remoteSock0, clientSock);
+           exit(0);
+       }
+       else
+       {
+           forwardData(remoteSock1, clientSock);
+           exit(0);
+       }
+   }
 
-    close(remoteSock);
-    close(clientSock);
+   close(remoteSock0);
+   close(remoteSock1);
+   close(clientSock);
 }
 
 void forwardData(int sourceSock, int destinationSock)
@@ -250,33 +312,59 @@ void forwardData(int sourceSock, int destinationSock)
     close(sourceSock);
 }
 
-int createConnection()
+int createConnection(int num)
 {
-    struct sockaddr_in serverAddr;
-    struct hostent *server;
+    struct sockaddr_in serverAddr0;
+    struct sockaddr_in serverAddr1;
+    struct hostent *server0;
+    struct hostent *server1;
+    bool first = true;
     int sock;
 
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
-        cout << "ERROR: Bad client socket!" << endl;
+        logStream << "ERROR: Bad client socket!" << endl;
+        logIt(logStream);
         return -1;
     }
 
-    if ((server = gethostbyname(remoteHost)) == NULL)
+    if(num == 0)
     {
-        cout << "ERROR: Bad client resolve!" << endl;
-        return -1;
+        if ((server0 = gethostbyname(remoteHost0)) == NULL)
+        {
+            logStream << "ERROR: Bad client resolve!" << endl;
+            logIt(logStream);
+            return -1;
+        }
+        memset(&serverAddr0, 0, sizeof(serverAddr0));
+        serverAddr0.sin_family = AF_INET;
+        memcpy(&serverAddr0.sin_addr.s_addr, server0->h_addr, server0->h_length);
+        serverAddr0.sin_port = htons(remotePort);
+        if (connect(sock, (struct sockaddr *) &serverAddr0, sizeof(serverAddr0)) < 0)
+        {
+            logStream << "ERROR: Bad client connection!" << endl;
+            logIt(logStream);
+            return -1;
+        }
     }
-
-    memset(&serverAddr, 0, sizeof(serverAddr));
-    serverAddr.sin_family = AF_INET;
-    memcpy(&serverAddr.sin_addr.s_addr, server->h_addr, server->h_length);
-    serverAddr.sin_port = htons(remotePort);
-
-    if (connect(sock, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) < 0)
+    else
     {
-        cout << "ERROR: Bad client connection!" << endl;
-        return -1;
+        if ((server1 = gethostbyname(remoteHost1)) == NULL)
+        {
+            logStream << "ERROR: Bad client resolve!" << endl;
+            logIt(logStream);
+            return -1;
+        }
+        memset(&serverAddr1, 0, sizeof(serverAddr1));
+        serverAddr1.sin_family = AF_INET;
+        memcpy(&serverAddr1.sin_addr.s_addr, server1->h_addr, server1->h_length);
+        serverAddr1.sin_port = htons(remotePort);
+        if (connect(sock, (struct sockaddr *) &serverAddr1, sizeof(serverAddr1)) < 0)
+        {
+            logStream << "ERROR: Bad client connection!" << endl;
+            logIt(logStream);
+            return -1;
+        }
     }
 
     return sock;
