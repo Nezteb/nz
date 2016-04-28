@@ -8,6 +8,9 @@ A simple web server in C++.
 Compile with:
 g++ nzServ.cpp -o nzServ.out
 
+Run with:
+./nzServ.out PORT DIR 2>&1 | tee nzServ.log
+
 */
 
 #include <stdio.h>
@@ -43,15 +46,15 @@ struct
 void web(int fd, int hit)
 {
 	int j;
-	int file_fd;
-	int buflen;
+	int fileFd;
+	int bufferLength;
 	int len;
 	long i;
 	long ret;
-	char *fstr;
+	char *fileStr;
 	static char buffer[BUFFERSIZE+1];
 
-	ret =read(fd, buffer, BUFFERSIZE);
+	ret = read(fd, buffer, BUFFERSIZE);
 
 	if(ret == 0 || ret == -1)
 	{
@@ -103,29 +106,29 @@ void web(int fd, int hit)
 
 	if(!strncmp(&buffer[0], "GET /\0", 6) || !strncmp(&buffer[0], "get /\0", 6))
 	{
-		strcpy(buffer,"GET /index.html");
+		strcpy(buffer, "GET /index.html");
 	}
 
-	buflen = strlen(buffer);
-	fstr = (char *)0;
+	bufferLength = strlen(buffer);
+	fileStr = (char *)0;
 
 	for(i = 0; mimeTypes[i].extension != 0; i++)
 	{
 		len = strlen(mimeTypes[i].extension);
 
-		if(!strncmp(&buffer[buflen-len], mimeTypes[i].extension, len))
+		if(!strncmp(&buffer[bufferLength-len], mimeTypes[i].extension, len))
 		{
-			fstr = mimeTypes[i].fileType;
+			fileStr = mimeTypes[i].fileType;
 			break;
 		}
 	}
-	if(fstr == 0)
+	if(fileStr == 0)
 	{
 		cout << "ERROR: File extension not supported!" << endl;
 		exit(1);
 	}
 
-	if((file_fd = open(&buffer[5],O_RDONLY)) == -1)
+	if((fileFd = open(&buffer[5], O_RDONLY)) == -1)
 	{
 		cout << "ERROR: Failed to open file!" << endl;
 		exit(1);
@@ -133,10 +136,10 @@ void web(int fd, int hit)
 
 	cout << "LOG: Send: " << &buffer[5] << " " << hit << endl;
 
-	sprintf(buffer,"HTTP/1.0 200 OK\r\nContent-Type: %s\r\n\r\n", fstr);
+	sprintf(buffer,"HTTP/1.0 200 OK\r\nContent-Type: %s\r\n\r\n", fileStr);
 	write(fd,buffer,strlen(buffer));
 
-	while ((ret = read(file_fd, buffer, BUFFERSIZE)) > 0)
+	while ((ret = read(fileFd, buffer, BUFFERSIZE)) > 0)
 	{
 		write(fd,buffer,ret);
 	}

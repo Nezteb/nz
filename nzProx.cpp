@@ -8,6 +8,9 @@ A simple reverse proxy and load balancer in C++.
 Compile with:
 g++ nzProx.cpp -o nzProx.out
 
+Run with:
+./nzProx.out -l PORT -h HOST -p PORT [-f] 2>&1 | tee nzProx.log
+
 */
 
 #include <arpa/inet.h>
@@ -182,11 +185,11 @@ void sigtermHandler(int signal)
 void serverLoop()
 {
     struct sockaddr_in clientAddr;
-    socklen_t addrlen = sizeof(clientAddr);
+    socklen_t addrLength = sizeof(clientAddr);
 
     while (true)
     {
-        clientSock = accept(serverSock, (struct sockaddr*)&clientAddr, &addrlen);
+        clientSock = accept(serverSock, (struct sockaddr*)&clientAddr, &addrLength);
 
         // handle client connection in a separate process
         if (fork() == 0)

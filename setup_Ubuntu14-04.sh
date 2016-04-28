@@ -59,6 +59,8 @@ ufw allow out proto udp from any to 8.8.8.8 port 53 # dns out
 ufw allow out proto udp from any to any port 67 # dhcp out
 ufw allow in proto udp from any to any port 68 # dhcp in
 ufw allow in proto tcp from any to any port $SSHPORT # ssh in
+ufw allow out proto tcp from any to any port 80 # http out
+ufw allow out proto tcp from any to any port 443 # https out
 
 if [[ "$ISPROXY" = "y" ]];
 then
