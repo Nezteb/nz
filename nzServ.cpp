@@ -9,7 +9,9 @@ Compile with:
 g++ nzServ.cpp -o nzServ.out
 
 Run with:
-./nzServ.out PORT DIR 2>&1 | tee nzServ.log
+./nzServ.out PORT DIR
+
+NOTE: Do not use relative directories. Just cd to the HTML location and run the exectuable from there.
 
 */
 
