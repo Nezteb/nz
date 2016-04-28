@@ -3,19 +3,19 @@
 from locust import HttpLocust, TaskSet, task
 from bs4 import BeautifulSoup
 
+logfile = open("./output.log", "a")
+
 class WebsiteTasks(TaskSet):
 	@task
 	def index(self):
-		response = self.client.get("/")
-		print "Locust %r" % (self.locust)
-		print "Status code: %r" % (response.status_code)
-		print "Content: %r" % (response.content)
-
-		#soup = BeautifulSoup(response.content, 'html.parser')
-		#hostname = soup.find(id="hostname")
-		#print hostname.decode_contents(formatter="html")
+		response = self.client.get("")
+		logfile.write("Locust %r: " % (self.locust))
+		soup = BeautifulSoup(response.content, 'html.parser')
+		hostname = soup.find(id="hostname")
+		logfile.write(hostname.decode_contents(formatter="html"))
+		logfile.write("\n")
 
 class WebsiteUser(HttpLocust):
 	task_set = WebsiteTasks
-	min_wait = 5000
-	max_wait = 10000
+	min_wait = 1000
+	max_wait = 5000
